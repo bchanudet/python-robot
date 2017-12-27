@@ -1,7 +1,7 @@
 # Theme customization - please change from the defaults!
 
 # Color for top bar, links, etc
-highlight_color: '#3498db'
+highlight_color: '#FFAE00'
 
 # Profile links on the left sidebar, leave blank to ignore
 social:
@@ -14,7 +14,7 @@ social:
   #tumblr: animalygifs
   #linkedin: philipjagielski
   #gplus: 110552447039675960964
-  #gravatar: 86e6ff8f75f9daef42d53b7f8002fd95
+  gravatar: cb4d574f91ddc16c035bc1b21028c24c
   #flickr: johndoe
 
 # "Hi, I'm _______"
@@ -29,4 +29,4 @@ google_analytics_key:
 show_disclaimer: true
 
 # Toggle link/icon to view atom feed (/atom.xml) in sidebar
-show_atom_feed: true
+show_atom_feed: false
