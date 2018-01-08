@@ -1,31 +1,37 @@
 {
     "deploy": {
         "packages": [
-            {
+            { 
                 "name": "python-robot",
+                "description": "Python Robot code",
                 "files": [
-                    "/**/*.*"
+                    "**"
                 ],
                 "exclude": [
-                    "/**/*.pdf",
-                    ".git/**" 
+                    "resources/**",
+                    ".git/**",
+                    "3d-models/**" 
                 ],
-                "useTargetList": true,
-                "targets": [ "RPI SFTP" ],
+                "targets": [ "RPI_SFTP" ],
                 "deployOnSave": true 
             }
         ],
 
         "targets": [        
-            {
-                "type": "sftp",
-                "name": "RPI SFTP",
+            { 
+                "name": "RPI_SFTP",
                 "description": "Home folder on RPI",
 
+                "type": "sftp",
                 "dir": "/home/pi/python-robot",
-                "host": "192.168.1.80", "port": 22,
-                "user": "pi" 
+
+                "host": "192.168.1.80", 
+                "port": 22,
+                "user": "pi",
+                "password": "raspberry"
             }
-        ]
+        ],
+        "openOutputOnDeploy": false,
+        "showPopupOnSuccess": false
     }
 }
