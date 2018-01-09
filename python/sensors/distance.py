@@ -8,6 +8,7 @@ class DistanceSensor(threading.Thread):
 
     def __init__(self, pin_trigger:int, pin_echo:int, interval:int = 2):
         """initializes the instance"""
+        super().__init__()
         self.pin_trigger = pin_trigger
         self.pin_echo = pin_echo
         self.interval = interval

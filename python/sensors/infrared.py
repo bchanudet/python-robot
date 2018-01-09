@@ -3,13 +3,14 @@ import Adafruit_ADS1x15
 
 class InfraredSenors(threading.Thread):
     """Thread running to use infrared sensors"""
-    def __init__(self, 
+    def __init__(self,
                  center: int = 0,
                  left: int = 1,
                  right: int = 2,
                  rear: int = 3,
                  interval: float = 0.5):
         """Initializes the instance and their channels"""
+        super().__init__()
         self.channels = {
             "center": center,
             "left": left,
@@ -37,7 +38,10 @@ class InfraredSenors(threading.Thread):
             self.values["right"] = adc.read_adc(self.channels["right"], gain=1)
             self.values["rear"] = adc.read_adc(self.channels["rear"], gain=1)
 
-            self.front_value = (-self.values["left"] + self.values["center"] + self.values["right"]) / 3
+            self.front_value = (
+                -self.values["left"]
+                + self.values["center"]
+                + self.values["right"]) / 3
             self.rear_value = self.values["rear"]
 
             time.sleep(self.interval)
