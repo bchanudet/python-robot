@@ -1,7 +1,7 @@
 import time, threading
 import Adafruit_ADS1x15
 
-class InfraredSenors(threading.Thread):
+class InfraredSensor(threading.Thread):
     """Thread running to use infrared sensors"""
     def __init__(self,
                  center: int = 0,
