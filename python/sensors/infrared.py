@@ -26,6 +26,7 @@ class InfraredSensor(threading.Thread):
         self.interval = interval
         self.front_value = 0.0
         self.rear_value = 0.0
+        self.gain: int = 8
         self.running = False
 
     def run(self):
@@ -33,10 +34,10 @@ class InfraredSensor(threading.Thread):
         adc = Adafruit_ADS1x15.ADS1115()
 
         while self.running:
-            self.values["center"] = adc.read_adc(self.channels["center"], gain=1)
-            self.values["left"] = adc.read_adc(self.channels["left"], gain=1)
-            self.values["right"] = adc.read_adc(self.channels["right"], gain=1)
-            self.values["rear"] = adc.read_adc(self.channels["rear"], gain=1)
+            self.values["center"] = adc.read_adc(self.channels["center"], gain=self.gain)
+            self.values["left"] = adc.read_adc(self.channels["left"], gain=self.gain)
+            self.values["right"] = adc.read_adc(self.channels["right"], gain=self.gain)
+            self.values["rear"] = adc.read_adc(self.channels["rear"], gain=self.gain)
 
             self.front_value = (
                 -self.values["left"]
