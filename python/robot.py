@@ -1,8 +1,9 @@
+#!/usr/bin/env python3
+
 import movement
 import sensors
 import time
 from gpiozero import Button
-
 
 
 class Robot(object):
@@ -27,6 +28,7 @@ class Robot(object):
         """Starts the robot"""
         self.status = "Initialized !"
         self.button_generic.wait_for_active()
+        time.sleep(2)
         self.is_started = True
         self.follow_line()
 
@@ -42,10 +44,17 @@ class Robot(object):
 
         factor: float = 0.0
         turn: float = 0.0
-        way: int = 1.0
-        confidence: int=0
+        way: float = 1.0
+        confidence: int = 0
+
+        started : float = 0.0
+        framesPerSecond : float = 10
+        sleepTime : float = 0.0
 
         while self.is_running:
+
+            # Log when we start 
+            started = time.perf_counter()
 
             # If asked for stop, we stop everything
             if self.stop_asked:
@@ -54,7 +63,19 @@ class Robot(object):
                 self.is_started = False
                 break
 
+            # Let's check in front of us for an obstacle
+            if self.sensor_distance.distance <= 5 :
+                # something is right in front of us, stop all movement
+                way = 0 
+            else if self.sensor_distance.distance <= 20 : 
+                # there is something coming up in front, maybe slow down ?
+                way = (1 - ((20-self.sensor_distance.distance)/16))
+            else:
+                # nothing found, let's go!
+                way = 1
+
             # Building or Destroying confidence
+
 
 
             # Adjusting confidence to factor
@@ -63,7 +84,13 @@ class Robot(object):
             if confidence > 30:
                 factor = 0.5
 
-            
+            self.output_movement.set_value(value_left=(factor+turn)*way, value_right=(factor-turn)*way)
+
+
+            # Sleep until next frame
+            sleepTime = (1/framesPerSecond) - (time.perf_counter() - started)
+            if sleepTime > 0:
+                time.sleep(sleepTime)
 
 
 ROBOT = Robot()

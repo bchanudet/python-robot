@@ -13,7 +13,7 @@
                     "3d-models/**" 
                 ],
                 "targets": [ "RPI_SFTP" ],
-                "deployOnSave": true 
+                "deployOnSave": false 
             }
         ],
 
