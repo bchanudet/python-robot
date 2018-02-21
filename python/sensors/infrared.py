@@ -26,7 +26,7 @@ class InfraredSensor(threading.Thread):
         self.interval = interval
         self.front_value = 0.0
         self.rear_value = 0.0
-        self.gain: int = 8
+        self.gain = 8
         self.running = False
 
     def run(self):

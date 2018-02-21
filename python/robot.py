@@ -4,6 +4,7 @@ import movement
 import sensors
 import time
 import statistics
+import math
 from gpiozero import Button
 
 
@@ -15,8 +16,8 @@ class Robot(object):
         self.status = "Initializing..."
 
         # Bunch of attributes
-        self.is_started: bool = False
-        self.is_running: bool = False
+        self.is_started = False
+        self.is_running = False
         self.stop_asked = False
 
         # Init all the PINS /o/
@@ -28,6 +29,7 @@ class Robot(object):
     def start(self):
         """Starts the robot"""
         self.status = "Initialized !"
+        print("Waiting for button")
         self.button_generic.wait_for_active()
         time.sleep(2)
         self.is_started = True
@@ -40,43 +42,50 @@ class Robot(object):
     def follow_line(self):
         """Follow a line detected by infrared sensors"""
         self.status = "Following line mode started"
+        print(self.status)
+        self.sensor_distance.start()
+        self.sensor_infrared.start()
+
         self.button_generic.when_activated = self.ask_for_stop
         self.is_running = True
 
-        factor: float = 0.0
-        turn: float = 0.0
-        way: float = 1.0
-        confidence: int = 0
+        factor = 0.0
+        turn = 0.0
+        way = 1.0
+        confidence = 0
 
-        started : float = 0.0
-        framesPerSecond : float = 10
-        sleepTime : float = 0.0
+        started = 0.0
+        framesPerSecond = 10
+        sleepTime = 0.0
 
         #Distance variable
-        newValueDistance : int = 1000
+        newValueDistance = 1000
 
         #Detection variables
-        maxValuePossible : int = pow(2,15)
-        minValuePossible : int = pow(2,15)
+        maxValuePossible = pow(2,15) - 1
+        minValuePossible = pow(2,15) - 1
 
-        newValueAtCenter : int  = 0
-        newValueAtLeft : int    = 0
-        newValueAtRight : int   = 0
-        newValueAtRear : int    = 0
+        print(maxValuePossible)
 
-        oldValuesAtCenter : list   = [0]
-        oldValuesAtLeft : list     = [0]
-        oldValuesAtRight : list    = [0]
-        oldValuesAtRear : list     = [0]
+        newValueAtCenter = 0
+        newValueAtLeft   = 0
+        newValueAtRight  = 0
+        newValueAtRear   = 0
+
+        oldValuesAtCenter = [0]
+        oldValuesAtLeft   = [0]
+        oldValuesAtRight  = [0]
+        oldValuesAtRear   = [0]
 
         # Estimate where the line could be
         # -1 : complete left
         #  0 : complete center
         # +1 : complete right
-        lineEstimatedPosition : float = 0.0
+        lineEstimatedPosition = 0.0
+        rawLinePosition = 0.0
 
         # Keep history to avoid jumps ? 
-        oldLinePositions : list = [0.0]
+        oldLinePositions = [0.0]
 
         while self.is_running:
 
@@ -118,31 +127,36 @@ class Robot(object):
             if   newValueAtLeft != maxValuePossible and newValueAtCenter == maxValuePossible and newValueAtRight != maxValuePossible :
                 # max value on center
                 lineEstimatedPosition = 0.0
-                confidence = max(100, confidence + 10)
+                tmpConfidence = confidence + 10
+                confidence = min(100, tmpConfidence)
             elif newValueAtLeft == maxValuePossible and newValueAtCenter != maxValuePossible and newValueAtRight != maxValuePossible :
                 # max value on left
                 lineEstimatedPosition = -1.0
-                confidence = max(100, confidence + 10)
+                confidence = min(100, confidence + 10)
             elif newValueAtLeft != maxValuePossible and newValueAtCenter != maxValuePossible and newValueAtRight == maxValuePossible :
                 # max value on right
                 lineEstimatedPosition = 1.0
-                confidence = max(100, confidence + 10)
+                confidence = min(100, confidence + 10)
 
             ## 2. No value is at maximum, so we do some calculation 
             else:         
-                lineEstimatedPosition = (-(newValueAtLeft/(maxValuePossible-minValuePossible)) +(newValueAtRight/(maxValuePossible-minValuePossible))) * (newValueAtCenter/(maxValuePossible-minValuePossible))
+                offsetToLeft = (newValueAtLeft - newValueAtCenter)
+                offsetToRight = (newValueAtRight - newValueAtCenter)
+
+                lineEstimatedPosition = (-offsetToLeft +offsetToRight)/maxValuePossible
+                rawLinePosition = lineEstimatedPosition
                 lineEstimatedPosition = min(1,max(-1,lineEstimatedPosition))
 
-                if statistics.median((newValueAtCenter,newValueAtLeft,newValueAtRight))/(maxValuePossible-minValuePossible) > 1.5:
-                    confidence = max(100, confidence + 5)
+                if statistics.median((newValueAtCenter,newValueAtLeft,newValueAtRight))/(maxValuePossible-minValuePossible) > 2.5:
+                    confidence = min(100, confidence + 5)
                 else:
-                    confidence = min(0, confidence - 10)
+                    confidence = max(0, confidence - 10)
 
             
             # Checking history of line position
             # if we detect a jump too big, we decrease the confidence
-            if abs(lineEstimatedPosition - oldLinePositions[-1]) > (statistics.pstdev(oldLinePositions) * 1.5) :
-                confidence = min(0, confidence - 5)
+            if abs(lineEstimatedPosition - oldLinePositions[-1]) > (statistics.pstdev(oldLinePositions) * 100) :
+                confidence = max(0, confidence - 5)
 
 
             # finally we affect the position to the turn
@@ -161,11 +175,25 @@ class Robot(object):
             if confidence > 50:
                 factor = 0.5
 
-            self.output_movement.set_value(value_left=(factor+turn)*way, value_right=(factor-turn)*way)
+            # self.output_movement.set_value(value_left=(factor+turn)*way, value_right=(factor-turn)*way)
 
             # Add new values to history
             oldLinePositions.append(lineEstimatedPosition)
 
+	    # Print values
+            print('{1:>+6d} | {0:>+6d} | {2:>+6d} | {3:>+2.6f} | {4:>+4d} | {5:>+2.6f} | {6:>+2.3f} | {7:>+2.3f} | {8:<32} | {9:>+5.3f} | {10:>+4.4f} |'.format(
+			newValueAtCenter, 
+			newValueAtLeft, 
+			newValueAtRight, 
+			rawLinePosition, 
+			confidence, 
+			turn, 
+			way, 
+			factor, 
+			''.join((' '*(15+math.ceil(lineEstimatedPosition*16)),'¤')),
+                        newValueDistance,
+			statistics.pstdev(oldLinePositions)*100
+            ))
 
             # Sleep until next frame
             sleepTime = (1/framesPerSecond) - (time.perf_counter() - started)

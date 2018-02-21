@@ -1,2 +1,2 @@
-from distance import DistanceSensor
-from infrared import InfraredSensor
+from .distance import DistanceSensor
+from .infrared import InfraredSensor
