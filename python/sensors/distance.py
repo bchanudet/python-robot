@@ -6,7 +6,7 @@ import RPi.GPIO as GPIO
 class DistanceSensor(threading.Thread):
     """Reprensents the distance sensor, allows it to run periodically"""
 
-    def __init__(self, pin_trigger:int, pin_echo:int, interval:int = 2):
+    def __init__(self, pin_trigger:int, pin_echo:int, interval:int = 1):
         """initializes the instance"""
         super().__init__()
         self.pin_trigger = pin_trigger
@@ -25,7 +25,7 @@ class DistanceSensor(threading.Thread):
 
         while self.running:
             GPIO.output(self.pin_trigger, False)
-            time.sleep(2)
+            time.sleep(1)
             GPIO.output(self.pin_trigger, True)
             time.sleep(0.00001)
             GPIO.output(self.pin_trigger, False)
@@ -40,6 +40,7 @@ class DistanceSensor(threading.Thread):
 
             # Multiply pulse_duration by speed of sound (34 300 cm/s), divided by 2.
             self.distance = round(pulse_duration * 34300 / 2, 1)
+            
             time.sleep(self.interval)
 
         GPIO.cleanup()

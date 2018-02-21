@@ -8,7 +8,7 @@ class InfraredSensor(threading.Thread):
                  left: int = 1,
                  right: int = 2,
                  rear: int = 3,
-                 interval: float = 0.5):
+                 interval: float = 0.05):
         """Initializes the instance and their channels"""
         super().__init__()
         self.channels = {
