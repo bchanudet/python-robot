@@ -26,6 +26,10 @@ class Robot(object):
         self.sensor_distance = sensors.DistanceSensor(pin_trigger=4, pin_echo=14)
         self.sensor_infrared = sensors.InfraredSensor(center=0, left=1, right=2, rear=3, interval=0.05)
 
+        # Set a complete factor for test
+        self.generalCoefficient = 0.25
+        self.framesPerSecond = 60
+
     def start(self):
         """Starts the robot"""
         self.status = "Initialized !"
@@ -58,12 +62,21 @@ class Robot(object):
                 initValuesRight.append(self.sensor_infrared.values["right"])
                 initValuesCenter.append(self.sensor_infrared.values["center"])
                 i = i+1
+                print("=",end="",flush=True)
             time.sleep(0.02)
+        print(" 100%!")
 
-        lowestValueOnLeft = statistics.mean(initValuesLeft)
-        lowestValueOnRight = statistics.mean(initValuesRight)
-        lowestValueOnCenter = statistics.mean(initValuesCenter)
+        lowestValueOnLeft = int(statistics.mean(initValuesLeft))
+        lowestValueOnRight = int(statistics.mean(initValuesRight))
+        lowestValueOnCenter = int(statistics.mean(initValuesCenter))
 
+        initValuesCenter.clear()
+        initValuesLeft.clear()
+        initValuesRight.clear()
+        
+        print("Left base : {0:d}".format(lowestValueOnLeft))
+        print("Center base : {0:d}".format(lowestValueOnCenter))
+        print("Right base : {0:d}".format(lowestValueOnRight))
         print("Initialization done! Press the button to start mode")
         self.button_generic.wait_for_active()
 
@@ -72,13 +85,16 @@ class Robot(object):
 
         fd = open("test.log",mode="a")
 
-        factor = 0.0
-        turn = 0.0
-        way = 1.0
+        # Final values initialiazed here
         confidence = 0
 
+        confidenceFactor = 0.0
+        turnFactor = 0.0
+        distanceCoefficient = 1.0
+        newValueToLeftMotor = 0.0
+        newValueToRightMotor = 0.0
+
         started = 0.0
-        framesPerSecond = 20
         sleepTime = 0.0
 
         #Distance variable
@@ -90,6 +106,10 @@ class Robot(object):
         newValueAtCenter = 0
         newValueAtLeft   = 0
         newValueAtRight  = 0
+
+        linearValueOfCenter = 0.0
+        linearValueOfLeft = 0.0
+        linearValueOfRight = 0.0
 
         # Estimate where the line could be
         # -1 : complete left
@@ -122,43 +142,29 @@ class Robot(object):
             # Let's check in front of us for an obstacle
             if newValueDistance <= 5 :
                 # something is right in front of us, stop all movement
-                way = 0 
+                distanceCoefficient = 0 
             elif newValueDistance <= 20 : 
                 # there is something coming up in front, maybe slow down ?
-                way = (1 - ((20-newValueDistance)/16))
+                distanceCoefficient = (1 - ((20-newValueDistance)/16))
             else:
                 # nothing found, let's go!
-                way = 1
+                distanceCoefficient = 1
 
             # Building or Destroying confidence
+            linearValueOfLeft = (max(lowestValueOnLeft, newValueAtLeft) - lowestValueOnLeft) / (maxValuePossible - lowestValueOnLeft)
+            linearValueOfRight = (max(lowestValueOnRight, newValueAtRight) - lowestValueOnRight) / (maxValuePossible - lowestValueOnRight)
+            linearValueOfCenter = (max(lowestValueOnCenter, newValueAtCenter) - lowestValueOnCenter) / (maxValuePossible - lowestValueOnCenter)
+            sumOfValues = (linearValueOfLeft + linearValueOfCenter + linearValueOfRight)
 
-            ## 1. If one of the value is at maximum, we know the line position, so we boost confidence
-            if   newValueAtLeft != maxValuePossible and newValueAtCenter == maxValuePossible and newValueAtRight != maxValuePossible :
-                # max value on center
-                lineEstimatedPosition = 0.0
-                confidence = confidence + 10
-            elif newValueAtLeft == maxValuePossible and newValueAtCenter != maxValuePossible and newValueAtRight != maxValuePossible :
-                # max value on left
-                lineEstimatedPosition = -1.0
-                confidence = confidence + 10
-            elif newValueAtLeft != maxValuePossible and newValueAtCenter != maxValuePossible and newValueAtRight == maxValuePossible :
-                # max value on right
-                lineEstimatedPosition = 1.0
-                confidence = confidence + 10
-
-            ## 2. No value is at maximum, so we do some calculation 
-            else:         
-                # values
-                linearValueOfLeft = (max(lowestValueOnLeft, newValueAtLeft) - lowestValueOnLeft) / (maxValuePossible - lowestValueOnLeft)
-                linearValueOfRight = (max(lowestValueOnRight, newValueAtRight) - lowestValueOnRight) / (maxValuePossible - lowestValueOnRight)
-                linearValueOfCenter = (max(lowestValueOnCenter, newValueAtCenter) - lowestValueOnCenter) / (maxValuePossible - lowestValueOnCenter)
-
-                lineEstimatedPosition = ((linearValueOfLeft * -1) + (linearValueOfCenter * 0) + (linearValueOfRight * 1)) / (linearValueOfLeft + linearValueOfCenter + linearValueOfRight)
-                
-                if statistics.mean((linearValueOfLeft,linearValueOfCenter,linearValueOfRight)) > .5:
-                    confidence = confidence + 5
-                else:
-                    confidence = confidence - 10
+            if sumOfValues == 0 :
+                lineEstimatedPosition = -1 if (lineEstimatedPosition < 0) else 1
+            else :
+                lineEstimatedPosition = ((linearValueOfLeft * -1) + (linearValueOfCenter * 0) + (linearValueOfRight * 1)) / sumOfValues
+            
+            if statistics.mean((linearValueOfLeft,linearValueOfCenter,linearValueOfRight)) > .05:
+                confidence = confidence + 5
+            else:
+                confidence = confidence - 5
 
             
             # Checking history of line position
@@ -167,56 +173,75 @@ class Robot(object):
                 confidence = confidence - 3
 
             # finally we affect the position to the turn
-            turn = lineEstimatedPosition/2
+            turnFactor = -math.pow(lineEstimatedPosition,3) * 0.75
 
             # Clearing history (keep last 2 seconds)
-            if len(oldLinePositions) > (framesPerSecond*2) : 
+            if len(oldLinePositions) > (self.framesPerSecond*2) : 
                 oldLinePositions.pop(0)
 
             # Clamp confidence and apply it to factor
             confidence = max(0,min(100,confidence))
-            factor = pow(confidence,2) / 10000
+            confidenceFactor = pow(confidence,2) / 10000
 
-            # self.output_movement.set_value(value_left=(factor+turn)*way, value_right=(factor-turn)*way)
 
+            # Assign new values to motor
+            newValueToLeftMotor = (confidenceFactor+turnFactor) * distanceCoefficient * self.generalCoefficient
+            newValueToRightMotor = (confidenceFactor - turnFactor) * distanceCoefficient * self.generalCoefficient
+            
             # Add new values to history
             oldLinePositions.append(lineEstimatedPosition)
 
             # Calculate remaining time to next frame
-            sleepTime = (1/framesPerSecond) - (time.perf_counter() - started)
+            sleepTime = (1/self.framesPerSecond) - (time.perf_counter() - started)
 
 	        # Print values
-            print('{1:>+6d} | {0:>+6d} | {2:>+6d} | {3:>+2.6f} | {4:>+4d} | {5:>+2.6f} | {6:>+2.3f} | {7:>+2.3f} | {8:<32} | {9:>+8.2f} || {10:>1.6f} || {11:>+6d} ||'.format(
+            print('{1:>+6d} | {0:>+6d} | {2:>+6d} | {3:>+2.6f} | {4:>+4d} | {5:>+2.6f} | {6:>+2.3f} | {7:>+2.3f} | {8:<32} | {9:>+8.2f} || {10:>1.6f} ||| {12:>2.6f} | {11:>+2.6f} | {13:>+2.6f} | {14:>+6d} ||| {15:>+2.6f} | {16:>+2.6f} |'.format(
                 newValueAtCenter, 
                 newValueAtLeft, 
                 newValueAtRight, 
                 lineEstimatedPosition, 
                 confidence, 
-                turn, 
-                way, 
-                factor, 
+                turnFactor, 
+                distanceCoefficient, 
+                confidenceFactor, 
                 ''.join((' '*(15+math.ceil(lineEstimatedPosition*16)),'¤')),
                 newValueDistance,
                 sleepTime,
-                maxValuePossible
+                linearValueOfCenter,
+                linearValueOfLeft,
+                linearValueOfRight,
+                maxValuePossible,
+                newValueToLeftMotor,
+                newValueToRightMotor
             ))
 
-            print('{1:d},{0:d},{2:d},{3:f},{4:d},{5:f},{6:f},{7:f},[{8:<32}],{9:f},{10:f},{11:f},{12:f},{13:d}'.format(
+            print('{1:d},{0:d},{2:d},{3:f},{4:d},{5:f},{6:f},{7:f},[{8:<32}],{9:f},{10:f},{11:f},{12:f},{13:d},{14:f},{15:f},{16:f},{17:f},{18:f}'.format(
                 newValueAtCenter, 
                 newValueAtLeft, 
                 newValueAtRight, 
                 lineEstimatedPosition, 
                 confidence, 
-                turn, 
-                way, 
-                factor, 
+                turnFactor, 
+                distanceCoefficient, 
+                confidenceFactor, 
                 ''.join((' '*(16+math.ceil(lineEstimatedPosition*15)),'|')),
                 newValueDistance,
                 statistics.pstdev(oldLinePositions)*100,
                 abs(lineEstimatedPosition - oldLinePositions[-1]),
                 sleepTime,
-                maxValuePossible
+                maxValuePossible,
+                linearValueOfCenter,
+                linearValueOfLeft,
+                linearValueOfRight,
+                newValueToLeftMotor,
+                newValueToRightMotor
             ), file=fd)
+
+            # send values to motor
+            self.output_movement.set_value(
+                value_left = newValueToLeftMotor,
+                value_right= newValueToRightMotor
+            )
 
             # Sleep until next frame
             if sleepTime > 0:

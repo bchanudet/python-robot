@@ -13,7 +13,7 @@
                     "3d-models/**" 
                 ],
                 "targets": [ "RPI_SFTP" ],
-                "deployOnSave": false 
+                "deployOnSave": true 
             }
         ],
 
@@ -25,7 +25,7 @@
                 "type": "sftp",
                 "dir": "/home/pi/python-robot",
 
-                "host": "192.168.1.80", 
+                "host": "raspberry.pi", 
                 "port": 22,
                 "user": "pi",
                 "password": "raspberry"

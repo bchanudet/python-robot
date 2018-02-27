@@ -22,10 +22,11 @@ class DistanceSensor(threading.Thread):
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.pin_trigger, GPIO.OUT)
         GPIO.setup(self.pin_echo, GPIO.IN)
+        
+        pulse_start = 0
+        pulse_end = 0
 
         while self.running:
-            GPIO.output(self.pin_trigger, False)
-            time.sleep(1)
             GPIO.output(self.pin_trigger, True)
             time.sleep(0.00001)
             GPIO.output(self.pin_trigger, False)
@@ -41,6 +42,9 @@ class DistanceSensor(threading.Thread):
             # Multiply pulse_duration by speed of sound (34 300 cm/s), divided by 2.
             self.distance = round(pulse_duration * 34300 / 2, 1)
             
+            #put TRIG to 0 to empty condensator
+            GPIO.output(self.pin_trigger, False)
+
             time.sleep(self.interval)
 
         GPIO.cleanup()
