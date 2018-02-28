@@ -7,11 +7,6 @@
                 "files": [
                     "**"
                 ],
-                "exclude": [
-                    "resources/**",
-                    ".git/**",
-                    "3d-models/**" 
-                ],
                 "targets": [ "RPI_SFTP" ],
                 "deployOnSave": true 
             }

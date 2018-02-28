@@ -37,6 +37,3 @@ class MovementRaw(object):
         self.left.value = 0
         self.right.value = 0
 
-    def __del__(self):
-        self.right.close()
-        self.left.close()

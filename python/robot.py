@@ -5,6 +5,7 @@ import sensors
 import time
 import statistics
 import math
+import sys
 from gpiozero import Button
 
 
@@ -27,8 +28,11 @@ class Robot(object):
         self.sensor_infrared = sensors.InfraredSensor(center=0, left=1, right=2, rear=3, interval=0.05)
 
         # Set a complete factor for test
-        self.generalCoefficient = 0.25
-        self.framesPerSecond = 60
+        self.generalCoefficient = 0.1
+        self.framesPerSecond = 120
+
+        self.confidenceIncrement = 200
+        self.confidenceDecrement = -200
 
     def start(self):
         """Starts the robot"""
@@ -44,11 +48,16 @@ class Robot(object):
         """Follow a line detected by infrared sensors"""
         self.status = "Starting follow line mode"
         print(self.status)
+        print("General Coefficient: {0}".format(self.generalCoefficient))
+        print("Confidence Increment: {0}".format(self.confidenceIncrement))
+        print("Confidence Decrement: {0}".format(self.confidenceDecrement))
+        print("Frames per second: {0}".format(self.framesPerSecond))
         self.sensor_distance.start()
         self.sensor_infrared.start()
         time.sleep(2)
 
         # Init here
+        print("")
         print("Initialization phase. Press button to start")
         initValuesLeft = []
         initValuesRight = []
@@ -86,7 +95,7 @@ class Robot(object):
         fd = open("test.log",mode="a")
 
         # Final values initialiazed here
-        confidence = 0
+        confidence = 0.0
 
         confidenceFactor = 0.0
         turnFactor = 0.0
@@ -161,19 +170,19 @@ class Robot(object):
             else :
                 lineEstimatedPosition = ((linearValueOfLeft * -1) + (linearValueOfCenter * 0) + (linearValueOfRight * 1)) / sumOfValues
             
-            if statistics.mean((linearValueOfLeft,linearValueOfCenter,linearValueOfRight)) > .05:
-                confidence = confidence + 5
+            if max(newValueAtLeft,newValueAtCenter,newValueAtRight)/maxValuePossible > .25:
+                confidence = confidence + (self.confidenceIncrement/self.framesPerSecond)
             else:
-                confidence = confidence - 5
+                confidence = confidence + (self.confidenceDecrement/self.framesPerSecond)
 
             
             # Checking history of line position
             # if we detect a jump too big, we decrease the confidence
             if abs(lineEstimatedPosition - oldLinePositions[-1]) > 0.25 :
-                confidence = confidence - 3
+                confidence = confidence + (self.confidenceDecrement/self.framesPerSecond)
 
             # finally we affect the position to the turn
-            turnFactor = -math.pow(lineEstimatedPosition,3) * 0.75
+            turnFactor = math.pow(lineEstimatedPosition,3) # * (-1 if lineEstimatedPosition > 0 else 1)
 
             # Clearing history (keep last 2 seconds)
             if len(oldLinePositions) > (self.framesPerSecond*2) : 
@@ -185,8 +194,8 @@ class Robot(object):
 
 
             # Assign new values to motor
-            newValueToLeftMotor = (confidenceFactor+turnFactor) * distanceCoefficient * self.generalCoefficient
-            newValueToRightMotor = (confidenceFactor - turnFactor) * distanceCoefficient * self.generalCoefficient
+            newValueToLeftMotor = (confidenceFactor - turnFactor) * distanceCoefficient * self.generalCoefficient
+            newValueToRightMotor = (confidenceFactor + turnFactor) * distanceCoefficient * self.generalCoefficient
             
             # Add new values to history
             oldLinePositions.append(lineEstimatedPosition)
@@ -195,7 +204,7 @@ class Robot(object):
             sleepTime = (1/self.framesPerSecond) - (time.perf_counter() - started)
 
 	        # Print values
-            print('{1:>+6d} | {0:>+6d} | {2:>+6d} | {3:>+2.6f} | {4:>+4d} | {5:>+2.6f} | {6:>+2.3f} | {7:>+2.3f} | {8:<32} | {9:>+8.2f} || {10:>1.6f} ||| {12:>2.6f} | {11:>+2.6f} | {13:>+2.6f} | {14:>+6d} ||| {15:>+2.6f} | {16:>+2.6f} |'.format(
+            print('L:{1:>+6d} | C:{0:>+6d} | R:{2:>+6d} | P:{3:>+2.6f} | C:{4:>8.2f} | tF:{5:>+2.5f} | dC:{6:>+2.3f} | cF:{7:>+2.3f} | {8:<32} | Dt:{9:>+8.2f} || sl:{10:>1.4f} || Val: | {12:>2.4f} | {11:>+2.4f} | {13:>+2.4f} || Mot: | {14:>+2.4f} | {15:>+2.4f} |'.format(
                 newValueAtCenter, 
                 newValueAtLeft, 
                 newValueAtRight, 
@@ -210,12 +219,11 @@ class Robot(object):
                 linearValueOfCenter,
                 linearValueOfLeft,
                 linearValueOfRight,
-                maxValuePossible,
-                newValueToLeftMotor,
+                newValueToLeftMotor, 
                 newValueToRightMotor
             ))
 
-            print('{1:d},{0:d},{2:d},{3:f},{4:d},{5:f},{6:f},{7:f},[{8:<32}],{9:f},{10:f},{11:f},{12:f},{13:d},{14:f},{15:f},{16:f},{17:f},{18:f}'.format(
+            print('{1:d},{0:d},{2:d},{3:f},{4:f},{5:f},{6:f},{7:f},[{8:<32}],{9:f},{10:f},{11:f},{12:f},{13:d},{14:f},{15:f},{16:f},{17:f},{18:f}'.format(
                 newValueAtCenter, 
                 newValueAtLeft, 
                 newValueAtRight, 
@@ -224,7 +232,7 @@ class Robot(object):
                 turnFactor, 
                 distanceCoefficient, 
                 confidenceFactor, 
-                ''.join((' '*(16+math.ceil(lineEstimatedPosition*15)),'|')),
+                ''.join((' '*(15+math.ceil(lineEstimatedPosition*16)),'|')),
                 newValueDistance,
                 statistics.pstdev(oldLinePositions)*100,
                 abs(lineEstimatedPosition - oldLinePositions[-1]),
@@ -260,4 +268,14 @@ class Robot(object):
 
 
 ROBOT = Robot()
+
+if len(sys.argv) > 1:
+    ROBOT.generalCoefficient = float(sys.argv[1])
+if len(sys.argv) > 2:
+    ROBOT.confidenceIncrement = int(sys.argv[2])
+if len(sys.argv) > 3:
+    ROBOT.confidenceDecrement = int(sys.argv[3])
+if len(sys.argv) > 4:
+    ROBOT.framesPerSecond = int(sys.argv[4])
+
 ROBOT.start()
