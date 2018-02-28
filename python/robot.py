@@ -28,11 +28,11 @@ class Robot(object):
         self.sensor_infrared = sensors.InfraredSensor(center=0, left=1, right=2, rear=3, interval=0.05)
 
         # Set a complete factor for test
-        self.generalCoefficient = 0.1
-        self.framesPerSecond = 120
+        self.generalCoefficient = 0.25
+        self.framesPerSecond = 60
 
-        self.confidenceIncrement = 200
-        self.confidenceDecrement = -200
+        self.confidenceIncrement = 150
+        self.confidenceDecrement = -600
 
     def start(self):
         """Starts the robot"""
@@ -159,22 +159,27 @@ class Robot(object):
                 # nothing found, let's go!
                 distanceCoefficient = 1
 
-            # Building or Destroying confidence
+
+            # Finding line position with weighted average
             linearValueOfLeft = (max(lowestValueOnLeft, newValueAtLeft) - lowestValueOnLeft) / (maxValuePossible - lowestValueOnLeft)
             linearValueOfRight = (max(lowestValueOnRight, newValueAtRight) - lowestValueOnRight) / (maxValuePossible - lowestValueOnRight)
             linearValueOfCenter = (max(lowestValueOnCenter, newValueAtCenter) - lowestValueOnCenter) / (maxValuePossible - lowestValueOnCenter)
             sumOfValues = (linearValueOfLeft + linearValueOfCenter + linearValueOfRight)
 
-            if sumOfValues == 0 :
+            if sumOfValues < 0.01 :
                 lineEstimatedPosition = -1 if (lineEstimatedPosition < 0) else 1
             else :
                 lineEstimatedPosition = ((linearValueOfLeft * -1) + (linearValueOfCenter * 0) + (linearValueOfRight * 1)) / sumOfValues
             
+            # Building or destroying confidence
             if max(newValueAtLeft,newValueAtCenter,newValueAtRight)/maxValuePossible > .25:
                 confidence = confidence + (self.confidenceIncrement/self.framesPerSecond)
             else:
                 confidence = confidence + (self.confidenceDecrement/self.framesPerSecond)
 
+            # If center value is at maximum, boost confidence
+            if newValueAtCenter == maxValuePossible:
+                confidence = confidence + (self.confidenceIncrement/self.framesPerSecond)
             
             # Checking history of line position
             # if we detect a jump too big, we decrease the confidence
@@ -182,7 +187,7 @@ class Robot(object):
                 confidence = confidence + (self.confidenceDecrement/self.framesPerSecond)
 
             # finally we affect the position to the turn
-            turnFactor = math.pow(lineEstimatedPosition,3) # * (-1 if lineEstimatedPosition > 0 else 1)
+            turnFactor = math.pow(lineEstimatedPosition,3)/2 # * (-1 if lineEstimatedPosition > 0 else 1)
 
             # Clearing history (keep last 2 seconds)
             if len(oldLinePositions) > (self.framesPerSecond*2) : 
@@ -194,8 +199,8 @@ class Robot(object):
 
 
             # Assign new values to motor
-            newValueToLeftMotor = (confidenceFactor - turnFactor) * distanceCoefficient * self.generalCoefficient
-            newValueToRightMotor = (confidenceFactor + turnFactor) * distanceCoefficient * self.generalCoefficient
+            newValueToLeftMotor = -(confidenceFactor - turnFactor) * distanceCoefficient * self.generalCoefficient
+            newValueToRightMotor = -(confidenceFactor + turnFactor) * distanceCoefficient * self.generalCoefficient
             
             # Add new values to history
             oldLinePositions.append(lineEstimatedPosition)

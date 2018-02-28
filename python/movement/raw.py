@@ -15,8 +15,8 @@ class MovementRaw(object):
         current_values = self.get_values()
         # Normalizes the provided values
         new_values = {
-            "left": (max(min(value_left, 1), -1) * -1.0),
-            "right": (max(min(value_right, 1), -1) * 1.0)
+            "left": (max(min(value_left, 1), -1) * 1.0),
+            "right": (max(min(value_right, 1), -1) * -1.0)
         }
         # We set the values only if the new values are different
         if current_values["left"] != new_values["left"]:
